@@ -9,10 +9,7 @@ You can find the paper and talk video at [our website](https://proverbot9001.ucs
 ## Prerequisites
 
 You'll need to install `git`, `opam`, `rustup`, `graphviz`, `libgraphviz-dev`,
-`python3.7`, `python3.7-dev` and `python3.7-pip` to run Proverbot.
-
-Newer versions of python than 3.7 also work, as long as you also have
-their development headers and pip version.
+`python3.10`, `python3.10-dev` and `python3.10-pip` to run Proverbot.
 
 If you're running Linux, all three can be generally found in your package repositories.
 If that Linux is ubuntu, you'll have to first run:
@@ -46,14 +43,14 @@ can use "Bash on Ubuntu on Windows"), move to the directory you want
 to work in, and run:
 
 ```
-git clone git@github.com:UCSD-PL/proverbot9001.git
+git clone git@github.com:agrarpan/proverbot9001-plugin.git
 ```
 
-That should give you a new folder called `proverbot9001` with all the
+That should give you a new folder called `proverbot9001-plugin` with all the
 code inside. Move into this new directory:
 
 ```
-cd proverbot9001
+cd proverbot9001-plugin
 ```
 
 And run this command to install the dependencies
