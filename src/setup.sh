@@ -13,11 +13,11 @@ if [[ -f /etc/NIXOS ]]; then
 else
     git submodule init
     git submodule update
-    opam init -a --compiler=4.07.1
+    opam init -a --compiler=4.13.1
     eval `opam config env`
     opam update
     # For Coq:
-    opam pin add coq 8.10.2
+    opam pin add coq 8.16.1
     opam pin -y add menhir 20190626
     # For SerAPI:
     opam install -y coq-serapi
@@ -51,4 +51,4 @@ function setup-compcert {
 }
 
 # setup-coq-menhir
-setup-compcert
+# setup-compcert
