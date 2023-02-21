@@ -72,18 +72,3 @@ pre-trained weights instead:
 ```
 make download-weights
 ```
-
-Now you can run Proverbot9001:
-
-```
-make search-report
-```
-
-Which will generate some html in the `reports` directory.
-
-You should be able to check out the results by opening a web browser
-and navigating to the `reports` directory in the project.
-
-Once you've done that, you might like to try training from scratch
-with `make scrape` and `make train`, or [writing your own
-predictor](predictor.md).
