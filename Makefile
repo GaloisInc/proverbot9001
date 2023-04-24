@@ -32,7 +32,7 @@ CC_TRAIN_SCRAPES=$(patsubst %,%.scrape,$(COMPCERT_TRAIN_FILES))
 all: scrape report
 
 setup:
-	./src/setup.sh && $(MAKE) publish-depv
+	./src/setup.sh
 
 data/compcert-scrape.txt: $(CC_TRAIN_SCRAPES)
 	cat $(CC_TRAIN_SCRAPES) > $@
@@ -105,11 +105,11 @@ publish:
 	$(MAKE) update-index
 
 publish-weights:
-	rsync -avzP $(WEIGHTSFILE) goto:proverbot9001-site/downloads/weights-`date -I`.dat
-	ssh goto cp proverbot9001-site/downloads/weights-`date -I`.dat proverbot9001-site/downloads/weights-latest.dat
+	rsync -avzP $(WEIGHTSFILE) goto:proverbot9001-site/downloads/weights-`git branch --show-current`-`date -I`.dat
+	ssh goto cp proverbot9001-site/downloads/weights-`git branch --show-current`-`date -I`.dat proverbot9001-site/downloads/weights-`git branch --show-current`-latest.dat
 
 download-weights:
-	curl -o data/polyarg-weights.dat proverbot9001.ucsd.edu/downloads/weights-latest.dat
+	curl -L -o data/polyarg-weights.dat https://proverbot9001.ucsd.edu/downloads/weights-`git branch --show-current`-latest.dat
 
 publish-depv:
 	opam info -f name,version menhir ocamlfind ppx_deriving ppx_import cmdliner core_kernel sexplib ppx_sexp_conv camlp5 | awk '{print; print ""}' > known-good-dependency-versions.md
