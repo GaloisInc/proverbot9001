@@ -179,9 +179,23 @@ class SearchGraph:
             node_handle.attr["style"] = "filled"
 
     def draw(self, filename: str) -> None:
-        Path(filename).parent.mkdir(parents=True, exist_ok=True)
         with nostderr():
             self.__graph.draw(filename, prog="dot")
+
+    def export_string_to_file(self):
+        with open("graph_string", "w") as file:
+            file.write(self.__graph.string())
+    
+    def print_label_recursive(self, node):
+
+        node_handle = self.__graph.get_node(node.node_id)
+        output_dict = {"name": node.prediction}
+        if node_handle.attr["fillcolor"]:
+            output_dict["color"] = node_handle.attr["fillcolor"]
+        if node.children:
+            output_dict["children"] = [self.print_label_recursive(i) for i in node.children]
+
+        return output_dict
 
     def write_feat_json(self, filename: str) -> None:
         assert self.feature_extractor
@@ -509,7 +523,9 @@ def dfs_proof_search_with_graph(lemma_name: str,
                 coq.run_stmt(command)
             command_list, _ = search(pbar, [next_node], subgoals_stack_start, 0)
         pbar.clear()
-    g.draw(f"{output_dir}/{module_prefix}{lemma_name}.svg")
+
+    with open(f"{module_prefix}-json_graph.txt", "w") as graph_json:
+        graph_json.write(str(g.print_label_recursive(g.start_node)))
     if args.features_json:
         g.write_feat_json(f"{output_dir}/{module_prefix}"
                           f"{lemma_name}.json")
@@ -571,7 +587,7 @@ class BFSNode:
             cur_node = unwrap(cur_node.previous)
 
     def draw_graph(self, path: str) -> None:
-        graph = pgv.AGraph(directed=True)
+        graph = pgv.AGraph(directed=True, rankdir="LR")
         next_node_id = 0
         def add_subgraph(root: "BFSNode") -> int:
             nonlocal graph
