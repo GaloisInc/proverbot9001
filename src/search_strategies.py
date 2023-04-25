@@ -195,6 +195,21 @@ class SearchGraph:
         with nostderr():
             self.__graph.draw(filename, prog="dot")
 
+    def export_string_to_file(self):
+        with open("graph_string", "w") as file:
+            file.write(self.__graph.string())
+
+    def print_label_recursive(self, node):
+
+        node_handle = self.__graph.get_node(node.node_id)
+        output_dict = {"name": node.prediction}
+        if node_handle.attr["fillcolor"]:
+            output_dict["color"] = node_handle.attr["fillcolor"]
+        if node.children:
+            output_dict["children"] = [self.print_label_recursive(i) for i in node.children]
+
+        return output_dict
+
     def write_feat_json(self, filename: str) -> None:
         assert self.feature_extractor
         def write_node(node: LabeledNode, f: IO[str]) -> None:
@@ -532,6 +547,8 @@ def dfs_proof_search_with_graph(lemma_name: str,
         pbar.clear()
     if args.generate_graph:
         g.draw(f"{output_dir}/{module_prefix}{lemma_name}.svg")
+    with open(f"{module_prefix}-json_graph.txt", "w") as graph_json:
+        graph_json.write(str(g.print_label_recursive(g.start_node)))
     if args.features_json:
         g.write_feat_json(f"{output_dir}/{module_prefix}"
                           f"{lemma_name}.json")
