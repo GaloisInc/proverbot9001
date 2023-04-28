@@ -11,3 +11,5 @@ pathlib_revised
 sparse_list
 tensorboard
 maturin
+beautifulsoup4
+alectryon
