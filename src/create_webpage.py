@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import webbrowser
 
 def main():
     with open("trialZd-json_graph.txt", "r") as json_graph:
@@ -39,6 +40,7 @@ def main():
             fp2.write(soup.prettify())
         fp2.close()
     fp.close()
+    webbrowser.open("modified_html.html", new=2)
 
 if __name__ == "__main__":
     main()

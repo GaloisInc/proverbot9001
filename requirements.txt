@@ -13,3 +13,4 @@ tensorboard
 maturin
 beautifulsoup4
 alectryon
+lxml
