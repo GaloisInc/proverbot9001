@@ -20,7 +20,7 @@ else
     # For Coq:
     opam pin add coq 8.16.1
     opam pin -y add menhir 20190626
-    opam install core
+    opam install core pyml coqide
     # For SerAPI:
     opam install -y coq-serapi
     # Python dependencies
