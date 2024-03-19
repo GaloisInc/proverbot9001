@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+setup.cfg
+setup.py
+src/coq_serapy/__init__.py
+src/coq_serapy/contexts.py
+src/coq_serapy/example.py
+src/coq_serapy/util.py
+src/coq_serapy.egg-info/PKG-INFO
+src/coq_serapy.egg-info/SOURCES.txt
+src/coq_serapy.egg-info/dependency_links.txt
+src/coq_serapy.egg-info/requires.txt
+src/coq_serapy.egg-info/top_level.txt

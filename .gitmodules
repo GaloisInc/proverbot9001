@@ -7,9 +7,6 @@
 [submodule "dataloader/gestalt-ratio"]
 	path = dataloader/gestalt-ratio
 	url = https://github.com/HazardousPeach/gestalt-ratio-rust.git
-[submodule "src/coq_serapy"]
-	path = coq_serapy
-	url = https://github.com/HazardousPeach/coq_serapy.git
 [submodule "coq-projects/coq-procrastination"]
 	path = coq-projects/coq-procrastination
 	url = git@github.com:Armael/coq-procrastination.git
