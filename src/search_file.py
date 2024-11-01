@@ -267,7 +267,8 @@ def get_already_done_jobs(args: argparse.Namespace) -> List[ReportJob]:
                 with proofs_file.open('r') as f, FileLock(f, exclusive=False):
                     for idx, line in enumerate(f):
                         try:
-                            (job_project, job_file, job_module, job_lemma), sol = json.loads(line)
+                            (job_project, job_file, job_module, job_lemma,
+                             job_span), sol = json.loads(line)
                         except json.decoder.JSONDecodeError:
                             print(f"On line {idx} in file {proofs_file}, "
                                   "hit a corrupted output line, likely due to NFS. "
@@ -276,7 +277,7 @@ def get_already_done_jobs(args: argparse.Namespace) -> List[ReportJob]:
                             continue
                         assert Path(job_file) == Path(filename), f"Job found in file {filename} " \
                             f"doesn't match it's filename {filename}. {job_file}"
-                        loaded_job = ReportJob(job_project, job_file, job_module, job_lemma)
+                        loaded_job = ReportJob(job_project, job_file, job_module, job_lemma, job_span)
                         if loaded_job in [job for job, sol in file_jobs]:
                             eprint(f"In project {project_dict['project_name']} "
                                    f"file {filename} "
@@ -406,7 +407,8 @@ def search_file_multithreaded(args: argparse.Namespace) -> None:
                 bar.update(n=num_already_done)
                 bar.refresh()
                 for _ in range(len(todo_jobs)):
-                    (done_project, done_file, done_module, done_lemma), sol = done.get()
+                    (done_project, done_file, done_module, done_lemma,
+                     done_span), sol = done.get()
                     if args.splits_file:
                         with args.splits_file.open('r') as splits_f:
                             project_dicts = json.loads(splits_f.read())
@@ -423,7 +425,9 @@ def search_file_multithreaded(args: argparse.Namespace) -> None:
                                                      filenames)
                                     + "-proofs.txt"))
                     with proofs_file.open('a') as f:
-                        f.write(json.dumps(((done_project, str(done_file), done_module, done_lemma),
+                        f.write(json.dumps(((done_project, str(done_file),
+                                             done_module, done_lemma,
+                                             done_span),
                                             sol.to_dict())))
                         f.write("\n")
                     bar.update()
