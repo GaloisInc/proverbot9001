@@ -23,6 +23,9 @@ class ReportJob(NamedTuple):
     filename: str
     module_prefix: str
     lemma_statement: str
+    # Starting and ending character offsets for the lemma, from the declaration
+    # through the final `Qed.`  Note these are *not* byte offsets.
+    span: Tuple[int, int]
 
 class Worker:
     args: argparse.Namespace
@@ -110,7 +113,7 @@ class Worker:
     def run_into_job(self, job: ReportJob, restart_anomaly: bool, careful: bool) -> None:
         assert self.coq
         assert job not in self.lemmas_encountered, "Jobs are out of order!"
-        job_project, job_file, job_module, job_lemma = job
+        job_project, job_file, job_module, job_lemma, job_span = job
         # If we need to change projects, we'll have to reset the coq instance
         # to load new includes, and set the opam switch
         if job_project != self.cur_project:
@@ -186,7 +189,8 @@ class Worker:
                 self.lemmas_encountered.append(ReportJob(self.cur_project,
                                                          unwrap(self.cur_file),
                                                          self.coq.sm_prefix,
-                                                         unique_lemma_statement))
+                                                         unique_lemma_statement,
+                                                         job_span))
 
     def skip_proof(self, lemma_statement: str, careful: bool) -> None:
         assert self.coq
@@ -227,7 +231,7 @@ class Worker:
     def run_job(self, job: ReportJob, restart: bool = True) -> SearchResult:
         assert self.coq
         self.run_into_job(job, restart, self.args.careful)
-        job_project, job_file, job_module, job_lemma = job
+        job_project, job_file, job_module, job_lemma, job_span = job
         initial_context: ProofContext = unwrap(self.coq.proof_context)
         if self.args.add_axioms and not self.axioms_already_added:
             self.axioms_already_added = True
@@ -380,8 +384,42 @@ def attempt_search(args: argparse.Namespace,
 def get_file_jobs(args: argparse.Namespace,
                   project: str, filename: str) -> List[ReportJob]:
     cmds = coq_serapy.load_commands(args.prelude / project / filename)
-    lemmas_in_file = coq_serapy.lemmas_in_file(filename, cmds,
+
+    lemmas_in_file_orig = coq_serapy.lemmas_in_file(filename, cmds,
                                                     args.include_proof_relevant)
+
+    # Build a map from lemma statement to `(start_pos, end_pos)`.
+    lemma_spans = {}
+    line_starts = [0]
+    pos = 0
+    current_lemma = None
+    current_lemma_start = None
+    lemma_stmts = set(stmt for (module, stmt) in lemmas_in_file_orig)
+    for cmd in cmds:
+        if cmd in lemma_stmts:
+            # For now, we consider the lemma to start on the first
+            # non-whitespace character after the previous command.  This
+            # means in `Foo.\n\n (* bar *)\n Lemma baz : ...`, we will
+            # consider lemma `baz` to start at the start of `(* bar *)`.
+            space_amount = len(cmd) - len(cmd.lstrip())
+            current_lemma = cmd
+            current_lemma_start = pos + space_amount
+        if coq_serapy.ending_proof(cmd):
+            space_amount = len(cmd) - len(cmd.rstrip())
+            current_lemma_end = pos + (len(cmd) - space_amount)
+            if current_lemma is not None:
+                assert current_lemma not in lemma_spans, \
+                        'duplicate lemma statement %r' % current_lemma
+                lemma_spans[current_lemma] = (current_lemma_start,
+                                                 current_lemma_end)
+        for i, part in enumerate(cmd.split('\n')):
+            if i > 0:
+                pos += 1
+                line_starts.append(pos)
+            pos += len(part)
+
+    lemmas_in_file = [(module, stmt, lemma_spans[stmt])
+                      for (module, stmt) in lemmas_in_file_orig]
 
     arg_proofs_names = None
     if args.proofs_file:
@@ -391,53 +429,26 @@ def get_file_jobs(args: argparse.Namespace,
         arg_proofs_names = [args.proof]
     elif args.proof_line:
         # Find a lemma overlapping the indicated line.
-        lemma_stmts = set(stmt for (module, stmt) in lemmas_in_file)
-        current_line = 1
-        current_lemma = None
-        current_lemma_start_line = None
-        found_lemma = None
-        for cmd in cmds:
-            if cmd in lemma_stmts:
-                # For now, we consider the lemma to start on the first line
-                # containing non-whitespace after the previous command.  This
-                # means in `Foo.\n\n (* bar *)\n Lemma baz : ...`, we will
-                # consider lemma `baz` to start on the line containing the
-                # comment `(* bar *)`.
-                space_amount = len(cmd) - len(cmd.lstrip())
-                space = cmd[:space_amount]
-                rest = cmd[space_amount:]
-                current_line += space.count('\n')
-                current_lemma = cmd
-                current_lemma_start_line = current_line
-                current_line += rest.count('\n')
-            elif coq_serapy.ending_proof(cmd):
-                current_line += cmd.count('\n')
-                print('lemma info:', (current_lemma, current_lemma_start_line, current_line))
-                # Upon ending the lemma, check whether the target line is
-                # contained within this lemma.
-                if current_lemma_start_line <= args.proof_line <= current_line:
-                    # In cases where multiple lemmas are run together on a
-                    # single line, the line number is not specific enough to
-                    # identify a particular lemma.
-                    assert found_lemma is None, \
-                            'found multiple lemmas overlapping line %d' % args.proof_line
-                    found_lemma = current_lemma
-                current_lemma = None
-                current_lemma_start_line = None
-            else:
-                current_line += cmd.count('\n')
-        assert found_lemma is not None, \
-                "couldn't find a lemma overlapping line %d" % args.proof_line
-        arg_proofs_names = [coq_serapy.lemma_name_from_statement(found_lemma)]
+        assert 1 <= args.proof_line <= len(line_starts), \
+                'line number %d is out of range' % args.proof_line
+
+        proof_pos = line_starts[args.proof_line - 1]
+        overlapping_lemmas = [stmt
+                              for module, stmt, (start, end) in lemmas_in_file
+                              if start <= proof_pos < end]
+        assert len(overlapping_lemmas) == 1, \
+                "expected exactly 1 lemma overlapping line %d, but found %d" % (
+                        args.proof_line, len(overlapping_lemmas))
+        arg_proofs_names = [coq_serapy.lemma_name_from_statement(overlapping_lemmas[0])]
 
     if arg_proofs_names:
-        return [ReportJob(project, filename, module, stmt)
-                for (module, stmt) in lemmas_in_file
+        return [ReportJob(project, filename, module, stmt, span)
+                for (module, stmt, span) in lemmas_in_file
                 if coq_serapy.lemma_name_from_statement(stmt)
                 in arg_proofs_names]
     else:
-        return [ReportJob(project, filename, module, stmt)
-                for (module, stmt) in lemmas_in_file]
+        return [ReportJob(project, filename, module, stmt, span)
+                for (module, stmt, span) in lemmas_in_file]
 
 
 def get_files_jobs(args: argparse.Namespace,

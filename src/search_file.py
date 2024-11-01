@@ -273,11 +273,13 @@ def get_already_done_jobs(args: argparse.Namespace) -> List[ReportJob]:
             try:
                 with proofs_file.open('r') as f:
                     for line in f:
-                        (job_project, job_file, job_module, job_lemma), sol = json.loads(line)
+                        (job_project, job_file, job_module, job_lemma,
+                         job_span), sol = json.loads(line)
                         already_done_jobs.append(ReportJob(job_project,
                                                            job_file,
                                                            job_module,
-                                                           job_lemma))
+                                                           job_lemma,
+                                                           job_span))
             except FileNotFoundError:
                 pass
 
@@ -378,7 +380,8 @@ def search_file_multithreaded(args: argparse.Namespace,
                 bar.update(n=num_already_done)
                 bar.refresh()
                 for _ in range(len(todo_jobs)):
-                    (done_project, done_file, done_module, done_lemma), sol = done.get()
+                    (done_project, done_file, done_module, done_lemma,
+                     done_span), sol = done.get()
                     if args.splits_file:
                         with args.splits_file.open('r') as splits_f:
                             project_dicts = json.loads(splits_f.read())
@@ -393,7 +396,9 @@ def search_file_multithreaded(args: argparse.Namespace,
                                                      filenames)
                                     + "-proofs.txt"))
                     with proofs_file.open('a') as f:
-                        f.write(json.dumps(((done_project, str(done_file), done_module, done_lemma),
+                        f.write(json.dumps(((done_project, str(done_file),
+                                             done_module, done_lemma,
+                                             done_span),
                                             sol.to_dict())))
                         f.write("\n")
                     bar.update()
