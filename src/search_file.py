@@ -149,6 +149,8 @@ def add_args_to_parser(parser: argparse.ArgumentParser) -> None:
     proofsGroup = parser.add_mutually_exclusive_group()
     proofsGroup.add_argument("--proof", default=None)
     proofsGroup.add_argument("--proofs-file", default=None)
+    proofsGroup.add_argument("--proof-line", type=int, default=None,
+                             help="process the proof that contains this line")
     parser.add_argument("--log-anomalies", type=Path, default=None)
     parser.add_argument("--log-hard-anomalies", type=Path, default=None)
     parser.add_argument("-j", "--num-threads", type=int, default=5)

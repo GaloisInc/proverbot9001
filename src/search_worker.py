@@ -379,15 +379,57 @@ def attempt_search(args: argparse.Namespace,
 
 def get_file_jobs(args: argparse.Namespace,
                   project: str, filename: str) -> List[ReportJob]:
+    cmds = coq_serapy.load_commands(args.prelude / project / filename)
+    lemmas_in_file = coq_serapy.lemmas_in_file(filename, cmds,
+                                                    args.include_proof_relevant)
+
     arg_proofs_names = None
     if args.proofs_file:
         with open(args.proofs_file, 'r') as f:
             arg_proofs_names = [line.strip() for line in f]
     elif args.proof:
         arg_proofs_names = [args.proof]
-    cmds = coq_serapy.load_commands(args.prelude / project / filename)
-    lemmas_in_file = coq_serapy.lemmas_in_file(filename, cmds,
-                                                    args.include_proof_relevant)
+    elif args.proof_line:
+        # Find a lemma overlapping the indicated line.
+        lemma_stmts = set(stmt for (module, stmt) in lemmas_in_file)
+        current_line = 1
+        current_lemma = None
+        current_lemma_start_line = None
+        found_lemma = None
+        for cmd in cmds:
+            if cmd in lemma_stmts:
+                # For now, we consider the lemma to start on the first line
+                # containing non-whitespace after the previous command.  This
+                # means in `Foo.\n\n (* bar *)\n Lemma baz : ...`, we will
+                # consider lemma `baz` to start on the line containing the
+                # comment `(* bar *)`.
+                space_amount = len(cmd) - len(cmd.lstrip())
+                space = cmd[:space_amount]
+                rest = cmd[space_amount:]
+                current_line += space.count('\n')
+                current_lemma = cmd
+                current_lemma_start_line = current_line
+                current_line += rest.count('\n')
+            elif coq_serapy.ending_proof(cmd):
+                current_line += cmd.count('\n')
+                print('lemma info:', (current_lemma, current_lemma_start_line, current_line))
+                # Upon ending the lemma, check whether the target line is
+                # contained within this lemma.
+                if current_lemma_start_line <= args.proof_line <= current_line:
+                    # In cases where multiple lemmas are run together on a
+                    # single line, the line number is not specific enough to
+                    # identify a particular lemma.
+                    assert found_lemma is None, \
+                            'found multiple lemmas overlapping line %d' % args.proof_line
+                    found_lemma = current_lemma
+                current_lemma = None
+                current_lemma_start_line = None
+            else:
+                current_line += cmd.count('\n')
+        assert found_lemma is not None, \
+                "couldn't find a lemma overlapping line %d" % args.proof_line
+        arg_proofs_names = [coq_serapy.lemma_name_from_statement(found_lemma)]
+
     if arg_proofs_names:
         return [ReportJob(project, filename, module, stmt)
                 for (module, stmt) in lemmas_in_file
