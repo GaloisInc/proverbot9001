@@ -23,9 +23,10 @@ class ReportJob(NamedTuple):
     filename: str
     module_prefix: str
     lemma_statement: str
-    # Starting and ending character offsets for the lemma, from the declaration
-    # through the final `Qed.`  Note these are *not* byte offsets.
-    span: Tuple[int, int]
+    # Character offsets of the start of the lemma statement, the end of the
+    # lemma statement / start of the proof, and end of the proof (e.g. after
+    # the `.` in `Qed.`).
+    span: Tuple[int, int, int]
 
 class Worker:
     args: argparse.Namespace
@@ -394,6 +395,7 @@ def get_file_jobs(args: argparse.Namespace,
     pos = 0
     current_lemma = None
     current_lemma_start = None
+    current_lemma_proof_start = None
     lemma_stmts = set(stmt for (module, stmt) in lemmas_in_file_orig)
     for cmd in cmds:
         if cmd in lemma_stmts:
@@ -404,6 +406,7 @@ def get_file_jobs(args: argparse.Namespace,
             space_amount = len(cmd) - len(cmd.lstrip())
             current_lemma = cmd
             current_lemma_start = pos + space_amount
+            current_lemma_proof_start = pos + len(cmd)
         if coq_serapy.ending_proof(cmd):
             space_amount = len(cmd) - len(cmd.rstrip())
             current_lemma_end = pos + (len(cmd) - space_amount)
@@ -411,7 +414,8 @@ def get_file_jobs(args: argparse.Namespace,
                 assert current_lemma not in lemma_spans, \
                         'duplicate lemma statement %r' % current_lemma
                 lemma_spans[current_lemma] = (current_lemma_start,
-                                                 current_lemma_end)
+                                              current_lemma_proof_start,
+                                              current_lemma_end)
         for i, part in enumerate(cmd.split('\n')):
             if i > 0:
                 pos += 1
@@ -434,7 +438,7 @@ def get_file_jobs(args: argparse.Namespace,
 
         proof_pos = line_starts[args.proof_line - 1]
         overlapping_lemmas = [stmt
-                              for module, stmt, (start, end) in lemmas_in_file
+                              for module, stmt, (start, proof_start, end) in lemmas_in_file
                               if start <= proof_pos < end]
         assert len(overlapping_lemmas) == 1, \
                 "expected exactly 1 lemma overlapping line %d, but found %d" % (
