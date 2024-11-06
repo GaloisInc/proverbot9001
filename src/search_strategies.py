@@ -524,7 +524,7 @@ def dfs_proof_search_with_graph(lemma_name: str,
             command_list, _ = search(pbar, [next_node], subgoals_stack_start, 0)
         pbar.clear()
 
-    with open(f"{module_prefix}-json_graph.txt", "w") as graph_json:
+    with open(f"{output_dir}/{module_prefix}{lemma_name}.graph.json", "w") as graph_json:
         json.dump(g.print_label_recursive(g.start_node), graph_json)
     if args.features_json:
         g.write_feat_json(f"{output_dir}/{module_prefix}"
