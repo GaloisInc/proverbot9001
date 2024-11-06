@@ -395,11 +395,19 @@ def search_file_multithreaded(args: argparse.Namespace,
                                    (util.safe_abbrev(Path(done_file),
                                                      filenames)
                                     + "-proofs.txt"))
+                    results = (
+                        # Key indicating which lemma was proved
+                        (done_project, str(done_file), done_module, done_lemma),
+                        # The solution report
+                        sol.to_dict(),
+                        # Additional data about this proof needed by the vscode
+                        # plugin
+                        {
+                            'span': done_span,
+                        },
+                    )
                     with proofs_file.open('a') as f:
-                        f.write(json.dumps(((done_project, str(done_file),
-                                             done_module, done_lemma,
-                                             done_span),
-                                            sol.to_dict())))
+                        f.write(json.dumps(results))
                         f.write("\n")
                     bar.update()
 
