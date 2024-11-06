@@ -395,6 +395,8 @@ def search_file_multithreaded(args: argparse.Namespace,
                                    (util.safe_abbrev(Path(done_file),
                                                      filenames)
                                     + "-proofs.txt"))
+                    module_prefix = util.escape_lemma_name(done_module)
+                    lemma_name = serapi_instance.lemma_name_from_statement(done_lemma)
                     results = (
                         # Key indicating which lemma was proved
                         (done_project, str(done_file), done_module, done_lemma),
@@ -404,6 +406,8 @@ def search_file_multithreaded(args: argparse.Namespace,
                         # plugin
                         {
                             'span': done_span,
+                            'module_prefix': module_prefix,
+                            'lemma_name': lemma_name,
                         },
                     )
                     with proofs_file.open('a') as f:
