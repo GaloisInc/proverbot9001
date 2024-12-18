@@ -162,7 +162,10 @@ def add_args_to_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--tokens-file", type=Path, default=Path("tokens.txt"))
     parser.add_argument("--beta-file", type=Path, default=Path("beta.txt"))
     parser.add_argument("--features-json", action='store_true')
-    parser.add_argument("--search-prefix", type=str, default=None)
+    parser.add_argument("--search-prefix", type=str, default=None,
+        help='start each synthesized proof with these commands')
+    parser.add_argument("--auto-search-prefix", action='store_true',
+        help='automatically use existing proof commands as search prefix')
 
 def parse_arguments(args_list: List[str]) -> Tuple[argparse.Namespace,
                                                    List[str],
@@ -274,12 +277,13 @@ def get_already_done_jobs(args: argparse.Namespace) -> List[ReportJob]:
                 with proofs_file.open('r') as f:
                     for line in f:
                         (job_project, job_file, job_module, job_lemma,
-                         job_span), sol = json.loads(line)
+                         job_span, job_prefix), sol = json.loads(line)
                         already_done_jobs.append(ReportJob(job_project,
                                                            job_file,
                                                            job_module,
                                                            job_lemma,
-                                                           job_span))
+                                                           job_span,
+                                                           job_prefix))
             except FileNotFoundError:
                 pass
 
@@ -381,7 +385,7 @@ def search_file_multithreaded(args: argparse.Namespace,
                 bar.refresh()
                 for _ in range(len(todo_jobs)):
                     (done_project, done_file, done_module, done_lemma,
-                     done_span), sol = done.get()
+                     done_span, done_prefix), sol = done.get()
                     if args.splits_file:
                         with args.splits_file.open('r') as splits_f:
                             project_dicts = json.loads(splits_f.read())

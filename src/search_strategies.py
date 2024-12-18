@@ -349,7 +349,8 @@ def dfs_proof_search_with_graph(lemma_name: str,
                                 output_dir: Path,
                                 args: argparse.Namespace,
                                 bar_idx: int,
-                                predictor: TacticPredictor) \
+                                predictor: TacticPredictor,
+                                prefix_commands: List[str]) \
                                 -> SearchResult:
     g = SearchGraph(args.tactics_file, args.tokens_file, lemma_name,
                     args.features_json)
@@ -508,11 +509,11 @@ def dfs_proof_search_with_graph(lemma_name: str,
                  leave=False,
                  position=bar_idx + 1,
                  dynamic_ncols=True, bar_format=mybarfmt) as pbar:
-        if args.search_prefix is None:
+        if prefix_commands is None:
             command_list, _ = search(pbar, [g.start_node], subgoals_stack_start, 0)
         else:
             next_node = g.start_node
-            for command in coq_serapy.read_commands(args.search_prefix):
+            for command in prefix_commands:
                 full_context_before = FullContext(relevant_lemmas,
                                                   coq.prev_tactics,
                                                   unwrap(coq.proof_context))
@@ -695,7 +696,8 @@ def bfs_beam_proof_search(lemma_name: str,
                           coq: coq_serapy.SerapiInstance,
                           args: argparse.Namespace,
                           bar_idx: int,
-                          predictor: TacticPredictor) \
+                          predictor: TacticPredictor,
+                          prefix_commands: List[str]) \
                           -> SearchResult:
     hasUnexploredNode = False
     graph_file = f"{args.output_dir}/{module_prefix}{lemma_name}.svg"
@@ -712,8 +714,8 @@ def bfs_beam_proof_search(lemma_name: str,
                          FullContext([], [],
                                      ProofContext([], [], [], [])), None)
     search_start_node = start_node
-    if args.search_prefix:
-        for command in coq_serapy.read_commands(args.search_prefix):
+    if prefix_commands:
+        for command in prefix_commands:
             full_context_before = FullContext(relevant_lemmas,
                                               coq.prev_tactics,
                                               unwrap(coq.proof_context))
@@ -882,7 +884,8 @@ def best_first_proof_search(lemma_name: str,
                        coq: coq_serapy.SerapiInstance,
                        args: argparse.Namespace,
                        bar_idx: int,
-                       predictor: TacticPredictor) \
+                       predictor: TacticPredictor,
+                       prefix_commands: List[str]) \
                        -> SearchResult:
     assert args.scoring_function in ["pickled", "const"] or args.search_type != "astar", "only pickled and const scorers are currently compatible with A* search"
     if args.scoring_function == "pickled":
@@ -894,8 +897,8 @@ def best_first_proof_search(lemma_name: str,
                          FullContext([], [],
                                      ProofContext([], [], [], [])), None)
     search_start_node = start_node
-    if args.search_prefix:
-        for command in coq_serapy.read_commands(args.search_prefix):
+    if prefix_commands:
+        for command in prefix_commands:
             full_context_before = FullContext(relevant_lemmas,
                                               coq.prev_tactics,
                                               unwrap(coq.proof_context))
