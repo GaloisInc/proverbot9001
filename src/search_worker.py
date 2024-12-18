@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict
 import subprocess
 import re
 import os
@@ -38,6 +39,10 @@ class ReportJob(NamedTuple):
     # lemma statement / start of the proof, and end of the proof (e.g. after
     # the `.` in `Qed.`).
     span: Tuple[int, int, int]
+    # List of commands to include as a prefix of the proof.  This comes from
+    # `--search-prefix`, or if `--auto-search-prefix` is set, it comes from
+    # whatever existing proof is currently in the file.
+    prefix_commands: List[str]
 
     def lemma_key(self) -> LemmaKey:
         return LemmaKey(
@@ -170,7 +175,7 @@ class Worker:
     def run_backwards_into_job(self, job: ReportJob, restart_anomaly: bool = True) -> None:
         assert self.coq
         assert not self.coq.proof_context, "Already in a proof!"
-        job_project, job_file, job_module, job_lemma, job_span = job
+        job_project, job_file, job_module, job_lemma, job_span, job_prefix = job
         lemma_name = coq_serapy.lemma_name_from_statement(job_lemma)
         for i in range(len(self.coq._file_state.local_lemmas)):
             ll_sm_stack, ll_lemma_hyp, ll_is_sec_local = self.coq._file_state.local_lemmas[-1]
@@ -243,7 +248,7 @@ class Worker:
 
     def run_into_job(self, job: ReportJob, restart_anomaly: bool, careful: bool) -> None:
         assert self.coq
-        job_project, job_file, job_module, job_lemma, job_span = job
+        job_project, job_file, job_module, job_lemma, job_span, job_prefix = job
         # If we need to change projects, we'll have to reset the coq instance
         # to load new includes, and set the opam switch
         assert job_project != None, "The job project is NONE!"
@@ -409,7 +414,7 @@ class SearchWorker(Worker):
         self.axioms_already_added = False
 
     def run_job(self, job: ReportJob, restart: bool = True) -> SearchResult:
-        job_project, job_file, job_module, job_lemma, job_span = job
+        job_project, job_file, job_module, job_lemma, job_span, job_prefix = job
         if self.coq is None:
           self.enter_instance(self.args.prelude / job_project)
         self.run_into_job(job, restart, self.args.careful)
@@ -441,7 +446,8 @@ class SearchWorker(Worker):
                              context_lemmas,
                              self.coq,
                              self.args.output_dir / self.cur_project,
-                             self.widx, self.predictor)
+                             self.widx, self.predictor,
+                             job_prefix)
             time_taken = time.time() - start_time
             while len(self.coq.tactic_history.getFullHistory()) > 1:
                 self.coq.cancel_last()
@@ -485,8 +491,15 @@ class SearchWorker(Worker):
                 TacticInteraction("Proof.", initial_context),
                 TacticInteraction("Admitted.", initial_context)]
         else:
+            # Add `Proof.` at the start, unless `--search-prefix` already
+            # included one.
+            first_tactic = coq_serapy.kill_comments(tactic_solution[0].tactic).strip()
+            if first_tactic == 'Proof.':
+                start_proof = []
+            else:
+                start_proof = [TacticInteraction("Proof.", initial_context)]
             solution = (
-                [TacticInteraction("Proof.", initial_context)]
+                start_proof
                 + tactic_solution +
                 [TacticInteraction("Qed.", empty_context)])
 
@@ -531,7 +544,8 @@ def attempt_search(args: argparse.Namespace,
                    coq: coq_serapy.SerapiInstance,
                    output_dir: Path,
                    bar_idx: int,
-                   predictor: TacticPredictor) \
+                   predictor: TacticPredictor,
+                   prefix_commands: List[str]) \
         -> SearchResult:
     if "Proof" not in coq.prev_tactics[-1]:
         coq.run_stmt("Proof.")
@@ -554,22 +568,26 @@ def attempt_search(args: argparse.Namespace,
             result = dfs_proof_search_with_graph(lemma_name, module_prefix,
                                                  context_lemmas,
                                                  coq, output_dir,
-                                                 args, bar_idx, predictor)
+                                                 args, bar_idx, predictor,
+                                                 prefix_commands)
         elif args.search_type == 'dfs-est':
             result = dfs_estimated(lemma_name, module_prefix,
                                    context_lemmas,
                                    coq, output_dir,
-                                   args, bar_idx, predictor)
+                                   args, bar_idx, predictor,
+                                   prefix_commands)
         elif args.search_type == 'beam-bfs':
             result = bfs_beam_proof_search(lemma_name, module_prefix,
                                            context_lemmas, coq,
                                            output_dir,
-                                           args, bar_idx, predictor)
+                                           args, bar_idx, predictor,
+                                           prefix_commands)
         elif args.search_type == 'astar' or args.search_type == 'best-first':
             result = best_first_proof_search(lemma_name, module_prefix,
                                              context_lemmas, coq,
                                              output_dir,
-                                             args, bar_idx, predictor)
+                                             args, bar_idx, predictor,
+                                             prefix_commands)
         else:
             assert False, args.search_type
     except KeyboardInterrupt as exc:
@@ -607,6 +625,7 @@ def get_file_jobs(args: argparse.Namespace,
 
     # Build a map from lemma statement to `(start_pos, end_pos)`.
     lemma_spans = {}
+    lemma_prefix_cmds = defaultdict(list)
     line_starts = [0]
     pos = 0
     current_lemma = None
@@ -623,7 +642,7 @@ def get_file_jobs(args: argparse.Namespace,
             current_lemma = cmd
             current_lemma_start = pos + space_amount
             current_lemma_proof_start = pos + len(cmd)
-        if coq_serapy.ending_proof(cmd):
+        elif coq_serapy.ending_proof(cmd):
             space_amount = len(cmd) - len(cmd.rstrip())
             current_lemma_end = pos + (len(cmd) - space_amount)
             if current_lemma is not None:
@@ -632,13 +651,29 @@ def get_file_jobs(args: argparse.Namespace,
                 lemma_spans[current_lemma] = (current_lemma_start,
                                               current_lemma_proof_start,
                                               current_lemma_end)
+        else:
+            if current_lemma is not None and args.auto_search_prefix:
+                # Trim off a single trailing or leading newline.  This makes
+                # the commands added here more consistent with the ones
+                # produced during the search, which don't have newlines.
+                clean_cmd = cmd
+                if clean_cmd[-1] == '\n':
+                    clean_cmd = clean_cmd[:-1]
+                elif clean_cmd[0] == '\n':
+                    clean_cmd = clean_cmd[1:]
+                lemma_prefix_cmds[current_lemma].append(clean_cmd)
         for i, part in enumerate(cmd.split('\n')):
             if i > 0:
                 pos += 1
                 line_starts.append(pos)
             pos += len(part)
 
-    lemmas_in_file = [(module, stmt, lemma_spans[stmt])
+    # When --search-prefix is set, use that prefix for every lemma.
+    if args.search_prefix:
+        prefix_cmds = coq_serapy.read_commands(args.search_prefix)
+        lemma_prefix_cmds = defaultdict(lambda: prefix_cmds)
+
+    lemmas_in_file = [(module, stmt, lemma_spans[stmt], lemma_prefix_cmds[stmt])
                       for (module, stmt) in lemmas_in_file_orig]
 
     arg_proofs_names = None
@@ -654,7 +689,7 @@ def get_file_jobs(args: argparse.Namespace,
 
         proof_pos = line_starts[args.proof_line - 1]
         overlapping_lemmas = [stmt
-                              for module, stmt, (start, proof_start, end) in lemmas_in_file
+                              for module, stmt, (start, proof_start, end), prefix in lemmas_in_file
                               if start <= proof_pos < end]
         assert len(overlapping_lemmas) == 1, \
                 "expected exactly 1 lemma overlapping line %d, but found %d" % (
@@ -662,11 +697,11 @@ def get_file_jobs(args: argparse.Namespace,
         arg_proofs_names = [coq_serapy.lemma_name_from_statement(overlapping_lemmas[0])]
 
     if arg_proofs_names:
-        return [ReportJob(project, filename, module, stmt, span)
-                for (module, stmt, span) in lemmas_in_file
+        return [ReportJob(project, filename, module, stmt, span, prefix_cmds)
+                for (module, stmt, span, prefix_cmds) in lemmas_in_file
                 if in_proofs_list(module, stmt, arg_proofs_names)]
-    return [ReportJob(project, filename, module, stmt, span)
-            for (module, stmt, span) in lemmas_in_file]
+    return [ReportJob(project, filename, module, stmt, span, prefix_cmds)
+            for (module, stmt, span, prefix_cmds) in lemmas_in_file]
 
 
 def get_files_jobs(args: argparse.Namespace,

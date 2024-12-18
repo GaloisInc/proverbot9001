@@ -361,7 +361,8 @@ def dfs_proof_search_with_graph(lemma_name: str,
                                 output_dir: Path,
                                 args: argparse.Namespace,
                                 bar_idx: int,
-                                predictor: TacticPredictor) \
+                                predictor: TacticPredictor,
+                                prefix_commands: List[str]) \
                                 -> SearchResult:
     g = SearchGraph(args.tactics_file, args.tokens_file, lemma_name,
                     args.features_json)
@@ -533,7 +534,7 @@ def dfs_proof_search_with_graph(lemma_name: str,
                  dynamic_ncols=True, bar_format=mybarfmt) as pbar:
         next_node = g.start_node
         if args.search_prefix is not None:
-            for command in coq_serapy.read_commands(args.search_prefix):
+            for command in prefix_commands:
                 full_context_before = FullContext(relevant_lemmas,
                                                   coq.prev_tactics,
                                                   unwrap(coq.proof_context))
@@ -742,7 +743,8 @@ def bfs_beam_proof_search(lemma_name: str,
                           output_dir: Path,
                           args: argparse.Namespace,
                           bar_idx: int,
-                          predictor: TacticPredictor) \
+                          predictor: TacticPredictor,
+                          prefix_commands: List[str]) \
                           -> SearchResult:
     hasUnexploredNode = False
     graph_file = f"{output_dir}/{module_prefix}{lemma_name}.svg"
@@ -760,8 +762,8 @@ def bfs_beam_proof_search(lemma_name: str,
                                      ProofContext([], [], [], [])),
                          unwrap(coq.proof_context), None)
     search_start_node = start_node
-    if args.search_prefix:
-        for command in coq_serapy.read_commands(args.search_prefix):
+    if prefix_commands:
+        for command in prefix_commands:
             full_context_before = FullContext(relevant_lemmas,
                                               coq.prev_tactics,
                                               unwrap(coq.proof_context))
@@ -939,7 +941,8 @@ def best_first_proof_search(lemma_name: str,
                        output_dir: Path,
                        args: argparse.Namespace,
                        bar_idx: int,
-                       predictor: TacticPredictor) \
+                       predictor: TacticPredictor,
+                       prefix_commands: List[str]) \
                        -> SearchResult:
     # assert args.scoring_function in ["pickled", "const", "pickled-normcert"] or args.search_type != "astar", "only pickled and const scorers are currently compatible with A* search"
     if args.scoring_function in ["pickled", "pickled-normcert"]:
@@ -953,8 +956,8 @@ def best_first_proof_search(lemma_name: str,
                                      ProofContext([], [], [], [])),
                          unwrap(coq.proof_context), None)
     search_start_node = start_node
-    if args.search_prefix:
-        for command in coq_serapy.read_commands(args.search_prefix):
+    if prefix_commands:
+        for command in prefix_commands:
             full_context_before = FullContext(relevant_lemmas,
                                               coq.prev_tactics,
                                               unwrap(coq.proof_context))
@@ -1115,7 +1118,8 @@ def dfs_estimated(lemma_name: str,
                   output_dir: Path,
                   args: argparse.Namespace,
                   bar_idx: int,
-                  predictor: TacticPredictor) \
+                  predictor: TacticPredictor,
+                  prefix_commands: List[str]) \
                   -> SearchResult:
     with args.pickled_estimator.open('rb') as f:
         with nostderr():
@@ -1134,4 +1138,4 @@ def dfs_estimated(lemma_name: str,
     return dfs_proof_search_with_graph(
         lemma_name, module_prefix,
         relevant_lemmas, coq, output_dir,
-        temp_args, bar_idx, predictor)
+        temp_args, bar_idx, predictor, prefix_commands)
