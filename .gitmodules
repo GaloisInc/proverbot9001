@@ -178,3 +178,6 @@
 [submodule "coq-projects/metalib"]
 	path = coq-projects/metalib
 	url = https://github.com/plclub/metalib.git
+[submodule "coq2vec"]
+	path = coq2vec
+	url = https://github.com/HazardousPeach/coq2vec
