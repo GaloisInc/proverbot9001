@@ -205,6 +205,9 @@ class SearchGraph:
         output_dict = {"name": node.prediction}
         if node_handle.attr["fillcolor"]:
             output_dict["color"] = node_handle.attr["fillcolor"]
+        if node.context_before:
+            output_dict["proofcontext"] = node.context_before.obligations.focused_hyps
+            output_dict["proofgoal"] = node.context_before.obligations.focused_goal
         if node.children:
             output_dict["children"] = [self.print_label_recursive(i) for i in node.children]
 
