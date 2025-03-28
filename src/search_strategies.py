@@ -715,6 +715,18 @@ class BFSNode:
         coq.update_state()
         return
 
+    def print_label_recursive(self):
+        output_dict = {"name": self.prediction.prediction}
+        if self.color:
+            output_dict["color"] = self.color
+        if self.context_before:
+            output_dict["proofcontext"] = self.context_before.obligations.focused_hyps
+            output_dict["proofgoal"] = self.context_before.obligations.focused_goal
+        if self.children:
+            output_dict["children"] = [child.print_label_recursive() for child in self.children]
+
+        return output_dict
+
 
 def contextInHistory(full_context: ProofContext, node: BFSNode):
     return any((coq_serapy.contextSurjective(full_context,
@@ -970,6 +982,12 @@ def best_first_proof_search(lemma_name: str,
                                         search_start_node)
     nodes_todo: List[AStarTask] = [AStarTask(1.0, search_start_node)]
 
+    def do_generate_graph():
+        if args.generate_graph:
+            start_node.draw_graph(graph_file)
+        with open(f"{output_dir}/{module_prefix}{lemma_name}.graph.json", "w") as graph_json:
+            json.dump(start_node.print_label_recursive(), graph_json)
+
     desc_name = lemma_name
     if len(desc_name) > 25:
         desc_name = desc_name[:22] + "..."
@@ -1041,8 +1059,7 @@ def best_first_proof_search(lemma_name: str,
             # Check if the proof is done
             if completed_proof(coq):
                 prediction_node.mkQED()
-                if args.generate_graph:
-                    start_node.draw_graph(graph_file)
+                do_generate_graph()
                 return SearchResult(SearchStatus.SUCCESS, relevant_lemmas,
                                     prediction_node.interactions()[1:], step+1, None)
             if args.scoring_function == "const":
@@ -1108,8 +1125,7 @@ def best_first_proof_search(lemma_name: str,
                 break
 
     hasUnexploredNode = len(nodes_todo) > 0
-    if args.generate_graph:
-        start_node.draw_graph(graph_file)
+    do_generate_graph()
     if hasUnexploredNode:
         return SearchResult(SearchStatus.INCOMPLETE, relevant_lemmas, None, step, None)
     return SearchResult(SearchStatus.FAILURE, relevant_lemmas, None, step, None)
