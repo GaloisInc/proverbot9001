@@ -71,6 +71,7 @@ from typing import (List, Tuple, NamedTuple, Optional, Sequence, Dict,
                     cast, Union, Set, Type, Any, Iterable)
 
 from enum import Enum, auto
+import re
 
 
 class ArgType(Enum):
@@ -952,7 +953,16 @@ class FeaturesPolyargPredictor(
                                 get_vec_features_size(metadata),
                                 get_num_indices(metadata)[1],
                                 get_num_tokens(metadata)).to(self.device)
-        model.load_state_dict(state.weights)
+        def fix_key(k):
+            k = re.sub(r'\._word_embedding([0-9]+)',
+                       r'.word_embeddings.\1',
+                       k)
+            k = re.sub(r'\._layer([0-9]+)',
+                       r'.layers.\1',
+                       k)
+            return k
+        weights = {fix_key(k): v for k,v in state.weights.items()}
+        model.load_state_dict(weights)
         self._model = model
         self.training_loss = state.loss
         self.num_epochs = state.epoch
