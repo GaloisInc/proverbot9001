@@ -22,6 +22,7 @@
 
 from tqdm import tqdm
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -573,13 +574,13 @@ def timeout_handler(signum, frame):
 
 def get_linearized(args: argparse.Namespace, coqargs: List[str],
                    bar_idx: int, filename: str) -> List[str]:
-    local_filename = str(args.prelude) + "/" + filename
+    local_filename = os.path.join(args.prelude, filename)
     loaded_commands = try_load_lin(
         args, bar_idx, local_filename)
     if loaded_commands is None:
         original_commands = \
             serapi_instance.load_commands_preserve(
-                args, bar_idx, str(args.prelude) + "/" + filename)
+                args, bar_idx, local_filename)
         try:
             if "linearizer_timeout" in vars(args):
                 signal.signal(signal.SIGALRM, timeout_handler)
