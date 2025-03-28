@@ -23,11 +23,25 @@ from util import unwrap, eprint, escape_lemma_name, split_by_char_outside_matchi
 
 obl_num: int = 0
 
+class LemmaKey(NamedTuple):
+    project_dir: str
+    filename: str
+    module_prefix: str
+    lemma_statement: str
+
 class ReportJob(NamedTuple):
     project_dir: str
     filename: str
     module_prefix: str
     lemma_statement: str
+
+    def lemma_key(self) -> LemmaKey:
+        return LemmaKey(
+                project_dir=self.project_dir,
+                filename=self.filename,
+                module_prefix=self.module_prefix,
+                lemma_statement=coq_serapy.kill_comments(self.lemma_statement).strip(),
+                )
 
 T = TypeVar('T', bound='Worker')
 
@@ -40,7 +54,7 @@ class Worker:
     cur_project: Optional[str]
     cur_file: Optional[str]
     last_program_statement: Optional[str]
-    lemmas_encountered: Dict[ReportJob, int]
+    lemmas_encountered: Dict[LemmaKey, int]
     remaining_commands: List[str]
     original_commands: List[str]
     obligation_num: int
@@ -53,7 +67,7 @@ class Worker:
         self.cur_file: Optional[str] = None
         self.cur_project: Optional[str] = None
         self.last_program_statement: Optional[str] = None
-        self.lemmas_encountered: Dict[ReportJob, int] = {}
+        self.lemmas_encountered: Dict[LemmaKey, int] = {}
         self.remaining_commands: List[str] = []
         self.obligation_num = 0
         self.unnamed_goal_num = 0
@@ -199,8 +213,7 @@ class Worker:
         self.obligation_num = obl_num
 
         # Get the state number from before the lemma from our dict.
-        checkjob = ReportJob(job_project, job_file, job_module, coq_serapy.kill_comments(job_lemma).strip())
-        state_before_lemma = self.lemmas_encountered[checkjob]
+        state_before_lemma = self.lemmas_encountered[job.lemma_key()]
         # Filter lemmas out of lemmas_encountered that occur after the target
         # lemma.
         self.lemmas_encountered = \
@@ -239,8 +252,7 @@ class Worker:
             self.enter_instance(self.args.prelude / self.cur_project)
             self.enter_file(job_file)
         # Strip comments for comparison with lemmas encountered
-        checkjob = ReportJob(job_project, job_file, job_module, coq_serapy.kill_comments(job_lemma).strip())
-        if checkjob in self.lemmas_encountered:
+        if job.lemma_key() in self.lemmas_encountered:
             self.run_backwards_into_job(job)
             return
 
@@ -301,11 +313,11 @@ class Worker:
                                            self.unnamed_goal_num)
             self.remaining_commands = rest_commands
             assert rest_commands is not None
-            norm_job = ReportJob(self.cur_project,
-                                 unwrap(self.cur_file),
-                                 self.coq.sm_prefix,
-                                 coq_serapy.kill_comments(unique_lemma_statement).strip())
-            self.lemmas_encountered[norm_job] = state_before_proof
+            norm_key = LemmaKey(self.cur_project,
+                                unwrap(self.cur_file),
+                                self.coq.sm_prefix,
+                                coq_serapy.kill_comments(unique_lemma_statement).strip())
+            self.lemmas_encountered[norm_key] = state_before_proof
             if coq_serapy.kill_comments(unique_lemma_statement).strip() == \
                coq_serapy.kill_comments(job_lemma).strip() and \
               self.coq.sm_prefix == job_module:
