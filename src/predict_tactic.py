@@ -91,7 +91,8 @@ def loadPredictorByName(predictor_type : str) -> TacticPredictor:
     return predictor_class() # type: ignore
 
 def loadPredictorByFile(filename : str, device: Optional[str] = None) -> TrainablePredictor:
-    predictor_type, saved_state = torch.load(str(filename), map_location='cpu')
+    predictor_type, saved_state = torch.load(str(filename), map_location='cpu',
+                                             weights_only=False)
     module_name, class_name = loadable_predictors[predictor_type]
     predictor_class = vars(importlib.import_module("models." + module_name))[class_name]
     predictor = predictor_class(device)
